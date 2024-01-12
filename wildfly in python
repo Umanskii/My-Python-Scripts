@@ -1,0 +1,60 @@
+#!/usr/bin/python
+#python script fully tested on 09.20.23
+import os
+import subprocess
+
+# Install Java 1.8
+subprocess.call(["yum", "install", "java-1.8.0-openjdk-devel"])
+
+# Check Java version
+subprocess.call(["java", "-version"])
+
+# Change the current working directory to /opt
+os.chdir("/opt")
+
+# Download and extract WildFly
+wildfly_url = "http://download.jboss.org/wildfly/14.0.1.Final/wildfly-14.0.1.Final.tar.gz"
+subprocess.call(["wget", wildfly_url])
+subprocess.call(["tar", "-xvf", "wildfly-14.0.1.Final.tar.gz"])
+subprocess.call(["mv", "/opt/wildfly-14.0.1.Final", "/opt/wildfly"])
+
+# Copy and configure wildfly.conf
+subprocess.call(["cp", "/opt/wildfly/docs/contrib/scripts/init.d/wildfly.conf", "/etc/default/"])
+with open("/etc/default/wildfly.conf", "a") as conf_file:
+    conf_file.write("JAVA_HOME=\"/usr/lib/jvm/default-java\"\n")
+    conf_file.write("JBOSS_HOME=\"/opt/wildfly\"\n")
+    conf_file.write("JBOSS_USER=wildfly\n")
+    conf_file.write("JBOSS_MODE=standalone\n")
+    conf_file.write("JBOSS_CONFIG=standalone.xml\n")
+    conf_file.write("JBOSS_DOMAIN_CONFIG=domain.xml\n")
+    conf_file.write("JBOSS_HOST_CONFIG=host-master.xml\n")
+    conf_file.write("STARTUP_WAIT=60\n")
+    conf_file.write("SHUTDOWN_WAIT=60\n")
+    conf_file.write("JBOSS_CONSOLE_LOG=\"/var/log/wildfly/console.log\"\n")
+   
+   # Copy wildfly-init-redhat.sh to /etc/init.d/
+subprocess.call(["cp", "/opt/wildfly/docs/contrib/scripts/init.d/wildfly-init-redhat.sh", "/etc/init.d/"])
+subprocess.call(["mv", "/etc/init.d/wildfly-init-redhat.sh", "/etc/init.d/wildfly"])
+
+# Add WildFly to system services
+subprocess.call(["chkconfig", "--add", "wildfly"])
+subprocess.call(["chkconfig", "wildfly", "on"])
+
+# Create a directory for WildFly logs
+os.makedirs("/var/log/wildfly")
+
+# Update standalone.xml with sed-like replacement
+input_file_path = "/opt/wildfly/standalone/configuration/standalone.xml"
+output_file_path = "/opt/wildfly/standalone/configuration/standalone.xml.modified"  # Specify a different output file
+
+with open(input_file_path, "r") as infile, open(output_file_path, "w") as outfile:
+    for line in infile:
+        modified_line = line.replace('<inet-address value="${jboss.bind.address:127.0.0.1}"/>', '<inet-address value="${jboss.bind.address:0.0.0.0}"/>')
+        outfile.write(modified_line)
+
+# Create the wildfly user
+subprocess.call(["adduser", "-r", "wildfly"])
+subprocess.call(["chown", "-R", "wildfly:wildfly", "/opt/wildfly/"])
+
+# Start the WildFly service
+subprocess.call(["service", "wildfly", "start"])
